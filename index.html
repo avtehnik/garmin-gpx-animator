@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>line test</title>
+  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/dat.gui@0.7.6/build/dat.gui.min.js"></script>
+  <link type="text/css" rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maptalks/dist/maptalks.css">
+  <script type="text/javascript" src="https://maptalks.org/maptalks.three/demo/js/maptalks.js"></script>
+  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/three@0.104.0/build/three.min.js"></script>
+  <script type="text/javascript"
+          src="https://cdn.jsdelivr.net/npm/three@0.104.0/examples/js/postprocessing/EffectComposer.js"></script>
+  <script type="text/javascript"
+          src="https://cdn.jsdelivr.net/npm/three@0.104.0/examples/js/postprocessing/RenderPass.js"></script>
+  <script type="text/javascript"
+          src="https://cdn.jsdelivr.net/npm/three@0.104.0/examples/js/shaders/CopyShader.js"></script>
+  <script type="text/javascript"
+          src="https://cdn.jsdelivr.net/npm/three@0.104.0/examples/js/postprocessing/ShaderPass.js"></script>
+
+  <script type="text/javascript"
+          src="https://cdn.jsdelivr.net/npm/three@0.104.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+
+  <!-- issue  https://github.com/mrdoob/three.js/issues/14104  -->
+  <!-- <script type="text/javascript"
+  src="https://cdn.jsdelivr.net/npm/three@0.104.0/examples/js/postprocessing/UnrealBloomPass.js"></script> -->
+  <script type="text/javascript" src="https://maptalks.org/maptalks.three/demo/js/UnrealBloomPass.js"></script>
+  <script type="text/javascript"
+          src="https://cdn.jsdelivr.net/npm/three-text2d@0.5.3/dist/three-text2d.min.js"></script>
+  <script type="text/javascript"
+          src="https://cdn.jsdelivr.net/npm/three@0.104.0/examples/js/libs/stats.min.js"></script>
+  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lz-string@1.4.4/libs/lz-string.min.js"></script>
+  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/maptalks.three@latest/dist/maptalks.three.js"></script>
+  <script type="text/javascript" src="https://maptalks.org/maptalks.three/demo/js/geoutil.js"></script>
+  <script type="text/javascript" src="GPXParser.js"></script>
+  <style>
+      html,
+      body {
+          margin: 0px;
+          height: 100%;
+          width: 100%;
+      }
+
+      #map {
+          width: 100%;
+          height: 100%;
+          background-color: #000;
+      }
+
+      #holder {
+          font-family: sans-serif;
+          color: #8a8f96;
+          width: 100%;
+          height: 100px;
+          margin: 0 auto;
+          position: absolute;
+          z-index: 1;
+
+      }
+
+      #holder.hover {
+          border: 1px dashed #333;
+      }
+
+  </style>
+</head>
+
+<body>
+<div id="holder">
+  <div id="status">File API &amp; FileReader API not supported</div>
+  <div>Garmin gpx animator</div>
+</div>
+<div id="map"></div>
+<script>
+
+    var baseLayer = new maptalks.TileLayer('tile', {
+        urlTemplate: 'http://{s}.tiles.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}.png?access_token=pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpejh2N21nMzAxMmQzMnA5emRyN2lucW0ifQ.jSE-g2vsn48Ry928pqylcg',
+        subdomains: ['a', 'b', 'c', 'd'],
+        attribution: '&copy; <a href="http://osm.org">OpenStreetMap</a> contributors, &copy; <a href="https://mapbox.com/">mapbox</a>'
+    });
+
+    var map = new maptalks.Map("map", {
+        center: [32.05348625327281, 49.44496661815478],
+        zoom: 13,
+        pitch: 0,
+        // bearing: 180,
+
+        centerCross: true,
+        doubleClickZoom: false,
+        baseLayer: baseLayer
+    });
+
+    // the ThreeLayer to draw buildings
+    var threeLayer = new maptalks.ThreeLayer('t', {
+        forceRenderOnMoving: true,
+        forceRenderOnRotating: true
+        // animation: true
+    });
+
+
+    threeLayer.prepareToDraw = function(gl, scene, camera) {
+        stats = new Stats();
+        stats.domElement.style.zIndex = 100;
+        document.getElementById('map').appendChild(stats.domElement);
+
+
+        var light = new THREE.DirectionalLight(0xffffff);
+        light.position.set(0, -10, 10).normalize();
+        scene.add(light);
+        this.initBloom();
+        this.setRendererRenderScene();
+
+    };
+    threeLayer.addTo(map);
+
+
+    /**
+     * initBloom
+     * */
+    maptalks.ThreeLayer.prototype.initBloom = function() {
+        const params = {
+            exposure: 1,
+            bloomStrength: 5.4,
+            bloomThreshold: 0,
+            bloomRadius: 0,
+            debug: false
+        };
+        const renderer = this.getThreeRenderer();
+        const size = this.getMap().getSize();
+        this.composer = new THREE.EffectComposer(renderer);
+        this.composer.setSize(size.width, size.height);
+
+        const scene = this.getScene(), camera = this.getCamera();
+        this.renderPass = new THREE.RenderPass(scene, camera);
+
+        this.composer.addPass(this.renderPass);
+
+        const bloomPass = this.bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(size.width, size.height));
+        bloomPass.renderToScreen = true;
+        bloomPass.threshold = params.bloomThreshold;
+        bloomPass.strength = params.bloomStrength;
+        bloomPass.radius = params.bloomRadius;
+
+        // composer.setSize(size.width, size.height);
+        // composer.addPass(renderPass);
+        this.composer.addPass(bloomPass);
+        this.bloomEnable = true;
+    }
+
+    /*
+       @override  renderer.renderScene
+
+    */
+
+    maptalks.ThreeLayer.prototype.setRendererRenderScene = function() {
+        this.getRenderer().renderScene = function() {
+            const layer = this.layer;
+            layer._callbackBaseObjectAnimation();
+            this._syncCamera();
+
+            const renderer = this.context, camera = this.camera, scene = this.scene;
+            if (layer.bloomEnable && layer.composer && layer.composer.passes.length > 1) {
+                if (renderer.autoClear) {
+                    renderer.autoClear = false;
+                }
+                if (layer.bloomPass) {
+                    camera.layers.set(1);
+                }
+                if (layer && layer.composer) {
+                    layer.composer.render(0);
+                }
+                renderer.clearDepth();
+                camera.layers.set(0);
+                renderer.render(scene, camera);
+            } else {
+                if (!renderer.autoClear) {
+                    renderer.autoClear = true;
+                }
+                renderer.render(scene, camera);
+            }
+
+            this.completeRender();
+        }
+    }
+
+
+    function animation() {
+        // layer animation support Skipping frames
+        threeLayer._needsUpdate = !threeLayer._needsUpdate;
+        if (threeLayer._needsUpdate) {
+            threeLayer.redraw();
+        }
+        stats.update();
+        requestAnimationFrame(animation);
+    }
+
+
+    var lines = [], lineTrails = [];
+    var material = new THREE.LineBasicMaterial({
+        linewidth: 1,
+        color: 'rgb(203,145,5)',
+        opacity: 1,
+        // blending: THREE.AdditiveBlending,
+        // transparent: true
+    });
+    var highlightmaterial = new THREE.LineBasicMaterial({
+        linewidth: 1,
+        color: '#fff',
+        opacity: 1,
+        // blending: THREE.AdditiveBlending,
+        // transparent: true,
+    });
+
+
+
+    const OPTIONS1 = {
+        altitude: 0,
+        colors: null
+    };
+
+    class Line extends maptalks.BaseObject {
+        constructor(lineString, options, material, layer) {
+            options = maptalks.Util.extend({}, OPTIONS1, options, {layer, lineString});
+            super();
+            this._initOptions(options);
+            const positions = _getLinePosition(lineString, layer).positions;
+            const geometry = new THREE.BufferGeometry();
+            geometry.addAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+
+
+            this._createLine(geometry, material);
+
+            const {altitude} = options;
+
+            const z = layer.distanceToVector3(altitude, altitude).x;
+            this.getObject3d().position.z = z;
+        }
+    }
+
+
+    //default values
+    var OPTIONS = {
+        trail: 5,
+        chunkLength: 50,
+        speed: 1,
+        altitude: 0,
+        interactive: false
+    };
+
+    const MAX_POINTS = 1000;
+
+    /**
+     * custom component
+     * */
+
+    class LineTrail extends maptalks.BaseObject {
+        constructor(lineString, options, material, layer) {
+            options = maptalks.Util.extend({}, OPTIONS, options, {layer, lineString});
+            super();
+            //Initialize internal configuration
+            // https://github.com/maptalks/maptalks.three/blob/1e45f5238f500225ada1deb09b8bab18c1b52cf2/src/BaseObject.js#L135
+            this._initOptions(options);
+
+            const {altitude, chunkLength, speed, trail} = options;
+            const chunkLines = lineSlice(lineString, chunkLength);
+
+            const positions = _getChunkLinesPosition([chunkLines[0]], layer).positions;
+            const geometry = new THREE.BufferGeometry();
+            const ps = new Float32Array(MAX_POINTS * 3); // 3 vertices per point
+            geometry.addAttribute('position', new THREE.BufferAttribute(ps, 3).setDynamic(true));
+            setLineGeometryAttribute(geometry, positions);
+            this._createLine(geometry, material);
+
+            //set object3d position
+            const z = layer.distanceToVector3(altitude, altitude).x;
+            this.getObject3d().position.z = z;
+
+            this._params = {
+                trail: Math.max(1, trail),
+                index: 0,
+                len: chunkLines.length,
+                chunkLines,
+                layer,
+                speed: Math.min(0.1, speed),
+                idx: 0,
+                positions: []
+            };
+            // this._init();
+        }
+
+
+        _init() {
+            const {len, chunkLines, layer, trail} = this._params;
+            for (let i = 0; i < len; i++) {
+                const result = chunkLines.slice(i, i + trail);
+                const ps = _getChunkLinesPosition(result, layer).positions;
+                this._params.positions[i] = ps;
+            }
+        }
+
+
+        _animation() {
+            const {index, positions, idx, speed, len, chunkLines, layer, trail} = this._params;
+            const i = Math.round(index);
+            if (i > idx) {
+                this._params.idx++;
+                let ps = positions[i];
+                if (!ps) {
+                    const result = chunkLines.slice(i, i + trail);
+                    ps = _getChunkLinesPosition(result, layer).positions;
+                    this._params.positions[i] = ps;
+                }
+                setLineGeometryAttribute(this.getObject3d().geometry, ps);
+                this.getObject3d().geometry.attributes.position.needsUpdate = true;
+            }
+            if (index >= len) {
+                this._params.index = -1;
+                this._params.idx = -1;
+            }
+            this._params.index += speed;
+        }
+    }
+
+
+
+
+
+    var holder = document.getElementById('holder'),
+        state = document.getElementById('status');
+
+    if (typeof window.FileReader === 'undefined') {
+        state.className = 'fail';
+    } else {
+        state.className = 'success';
+        state.innerHTML = 'Dji photos 3d visualizer';
+    }
+
+    holder.ondragover = function() {
+        this.className = 'hover';
+        return false;
+    };
+    holder.ondragend = function() {
+        this.className = '';
+        return false;
+    };
+    holder.ondrop = function(e) {
+        this.className = '';
+        e.preventDefault();
+        var points = [];
+        var vectors = [];
+        // photosLayer.clear();
+        // vectorsLayer.clear();
+        lines = [], lineTrails = [];
+        Array.prototype.forEach.call(e.dataTransfer.files, function(file) {
+
+
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                var contents = e.target.result;
+                var gpx = new gpxParser();
+                gpx.parse(contents);
+
+                gpx.tracks.forEach(function(track) {
+                    console.log('distance.total ',track.distance.total);
+                    console.log('elevation ',track.elevation);
+                    console.log(track);
+                    const lnglats = track.points.map(l => {
+                        return [l.lon, l.lat, l.ele];
+                    });
+
+                    const ps = lnglats.map(l => {
+                        const [lng, lat, height] = l;
+                        const z = threeLayer.distanceToVector3(height, height).x;
+                        return threeLayer.coordinateToVector3([lng, lat], z);
+                    });
+                    const line = new Line(ps, {}, material, threeLayer);
+                    line.getObject3d().layers.enable(1);
+                    lines.push(line);
+                    // console.log(lineSlice(lnglats, 20000));
+
+
+                    const lineTrail = new LineTrail(lnglats, { chunkLength: 100, altitude: 0, trail: 1 }, highlightmaterial, threeLayer);
+                    lineTrail.getObject3d().layers.enable(1);
+                    lineTrails.push(lineTrail);
+
+                    // const lineTrail1 = new LineTrail(lnglats.reverse(), {chunkLength: 100, altitude: 200, trail: 1}, highlightmaterial, threeLayer);
+                    // lineTrail1.getObject3d().layers.enable(1);
+                    // lineTrails.push(lineTrail1);
+
+
+                    threeLayer.addMesh(lines);
+                    threeLayer.addMesh(lineTrails);
+                })
+
+
+
+
+            };
+            reader.readAsText(file);
+            // map.fitExtent(photosLayer.getExtent(), 0);
+        });
+
+        animation();
+        // initGui();
+        return false;
+    };
+
+
+</script>
+</body>
+
+</html>
