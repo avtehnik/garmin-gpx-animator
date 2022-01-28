@@ -88,9 +88,17 @@
         baseLayer: baseLayer
     });
 
+    var photosLayer = new maptalks.VectorLayer('Markers', [], {
+        enableAltitude: true,        // enable altitude
+        altitudeProperty: 'altitude', // altitude property in properties, default by 'altitude',
+        drawAltitude: {
+            lineWidth: 1,
+            lineColor: '#000'
+        }
+    }).addTo(map);
 
     document.addEventListener('keydown', function(e) {
-        if(e.key==='n'){
+        if (e.key === 'n') {
             map.animateTo({
                 center: [32.05348625327281, 49.44496661815478],
                 zoom: 13,
@@ -104,7 +112,8 @@
     // the ThreeLayer to draw buildings
     var threeLayer = new maptalks.ThreeLayer('t', {
         forceRenderOnMoving: true,
-        forceRenderOnRotating: true
+        forceRenderOnRotating: true,
+        enableAltitude: true
         // animation: true
     });
 
@@ -360,7 +369,6 @@
         lines = [], lineTrails = [];
         Array.prototype.forEach.call(e.dataTransfer.files, function(file) {
 
-
             var reader = new FileReader();
             reader.onload = function(e) {
                 var contents = e.target.result;
@@ -371,12 +379,42 @@
                     console.log('distance.total ', track.distance.total);
                     console.log('elevation ', track.elevation);
                     console.log(track);
+
+
+                    var baseAltitude = track.points[0].ele;
+
                     const lnglats = track.points.map(l => {
-                        return [l.lon, l.lat, l.ele];
+                        return [l.lon, l.lat, l.ele - baseAltitude];
                     });
 
+
+                    var add = 0;
+                    lnglats.forEach(function(item) {
+                        add++;
+                        if (add > 10) {
+                            var point = new maptalks.Marker([item[0], item[1]], {
+                                    'properties': {
+                                        'altitude': item[2],
+                                    },
+                                    'symbol': {
+                                        'markerFile': '1x1.png',
+                                        'markerWidth': 1,
+                                        'markerHeight': 1,
+                                        'markerDx': 0,
+                                        'markerDy': 0,
+                                        'markerOpacity': 1
+                                    }
+                                }
+                            );
+                            photosLayer.addGeometry(point, true);
+                            add = 0;
+                        }
+
+                    })
+
+
                     map.animateTo({
-                        center: [lnglats[0][0],lnglats[0][1]],
+                        center: [lnglats[0][0], lnglats[0][1]],
                         zoom: 16,
                         pitch: 40
                     }, {
@@ -394,14 +432,14 @@
                     // console.log(lineSlice(lnglats, 20000));
 
 
-                    const lineTrail = new LineTrail(lnglats, {chunkLength: 100, altitude: 0, trail: 1}, highlightmaterial, threeLayer);
+                    const lineTrail = new LineTrail(lnglats, {chunkLength: 100, altitude: 1, trail: 1,}, highlightmaterial, threeLayer);
                     lineTrail.getObject3d().layers.enable(1);
                     lineTrails.push(lineTrail);
 
-                    // const lineTrail1 = new LineTrail(lnglats.reverse(), {chunkLength: 100, altitude: 200, trail: 1}, highlightmaterial, threeLayer);
+                    // const lineTrail1 = new LineTrail(lnglats.reverse(), {chunkLength: 100, altitude: -120, trail: 1}, highlightmaterial, threeLayer);
                     // lineTrail1.getObject3d().layers.enable(1);
                     // lineTrails.push(lineTrail1);
-
+                    //
 
                     threeLayer.addMesh(lines);
                     threeLayer.addMesh(lineTrails);
