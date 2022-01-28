@@ -88,6 +88,19 @@
         baseLayer: baseLayer
     });
 
+
+    document.addEventListener('keydown', function(e) {
+        if(e.key==='n'){
+            map.animateTo({
+                center: [32.05348625327281, 49.44496661815478],
+                zoom: 13,
+                pitch: 0
+            }, {
+                duration: 1000
+            });
+        }
+    });
+
     // the ThreeLayer to draw buildings
     var threeLayer = new maptalks.ThreeLayer('t', {
         forceRenderOnMoving: true,
@@ -210,7 +223,6 @@
     });
 
 
-
     const OPTIONS1 = {
         altitude: 0,
         colors: null
@@ -320,9 +332,6 @@
     }
 
 
-
-
-
     var holder = document.getElementById('holder'),
         state = document.getElementById('status');
 
@@ -359,11 +368,19 @@
                 gpx.parse(contents);
 
                 gpx.tracks.forEach(function(track) {
-                    console.log('distance.total ',track.distance.total);
-                    console.log('elevation ',track.elevation);
+                    console.log('distance.total ', track.distance.total);
+                    console.log('elevation ', track.elevation);
                     console.log(track);
                     const lnglats = track.points.map(l => {
                         return [l.lon, l.lat, l.ele];
+                    });
+
+                    map.animateTo({
+                        center: [lnglats[0][0],lnglats[0][1]],
+                        zoom: 16,
+                        pitch: 40
+                    }, {
+                        duration: 5000
                     });
 
                     const ps = lnglats.map(l => {
@@ -377,7 +394,7 @@
                     // console.log(lineSlice(lnglats, 20000));
 
 
-                    const lineTrail = new LineTrail(lnglats, { chunkLength: 100, altitude: 0, trail: 1 }, highlightmaterial, threeLayer);
+                    const lineTrail = new LineTrail(lnglats, {chunkLength: 100, altitude: 0, trail: 1}, highlightmaterial, threeLayer);
                     lineTrail.getObject3d().layers.enable(1);
                     lineTrails.push(lineTrail);
 
@@ -389,8 +406,6 @@
                     threeLayer.addMesh(lines);
                     threeLayer.addMesh(lineTrails);
                 })
-
-
 
 
             };
