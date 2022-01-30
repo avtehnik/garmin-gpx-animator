@@ -63,21 +63,6 @@
       }
 
   </style>
-
-  <title>Garmin gpx 3d visualizer</title>
-  <!-- Search Engine -->
-  <meta name="image" content="https://gpx.my.in.ua/share.png">
-  <!-- Schema.org for Google -->
-  <meta itemprop="name" content="Garmin gpx 3d visualizer">
-  <meta itemprop="image" content="https://gpx.my.in.ua/share.png">
-  <!-- Twitter -->
-  <meta name="twitter:card" content="summary">
-  <meta name="twitter:title" content="Garmin gpx 3d visualizer">
-  <!-- Open Graph general (Facebook, Pinterest & Google+) -->
-  <meta name="og:title" content="Garmin gpx 3d visualizer">
-  <meta name="og:image" content="https://gpx.my.in.ua/share.png">
-  <meta name="og:type" content="website">
-
 </head>
 
 <body>
@@ -87,6 +72,31 @@
 </div>
 <div id="map"></div>
 <script>
+
+    function toRadians(degrees) {
+        return degrees * Math.PI / 180;
+    };
+
+    // Converts from radians to degrees.
+    function toDegrees(radians) {
+        return radians * 180 / Math.PI;
+    }
+
+
+    function bearing(startLat, startLng, destLat, destLng) {
+        startLat = toRadians(startLat);
+        startLng = toRadians(startLng);
+        destLat = toRadians(destLat);
+        destLng = toRadians(destLng);
+
+        y = Math.sin(destLng - startLng) * Math.cos(destLat);
+        x = Math.cos(startLat) * Math.sin(destLat) -
+            Math.sin(startLat) * Math.cos(destLat) * Math.cos(destLng - startLng);
+        brng = Math.atan2(y, x);
+        brng = toDegrees(brng);
+        return (((brng + 360 + 180) % 360)).toFixed(3);
+    }
+
 
     var baseLayer = new maptalks.TileLayer('tile', {
         urlTemplate: 'http://{s}.tiles.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}.png?access_token=pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpejh2N21nMzAxMmQzMnA5emRyN2lucW0ifQ.jSE-g2vsn48Ry928pqylcg',
@@ -254,6 +264,141 @@
         colors: null
     };
 
+
+    //default values
+    var OPTIONS = {
+        altitude: 0,
+        trip: false,
+        rotation: false,
+        play: true,
+        chunkLength: 1
+    };
+
+    /**
+     * custom  component
+     *
+     * you can customize your own components
+     * */
+
+    class TripBox extends maptalks.BaseObject {
+        constructor(lineString, options, material, layer) {
+            options = maptalks.Util.extend({}, OPTIONS, options, {layer, lineString});
+            super();
+            //Initialize internal configuration
+            // https://github.com/maptalks/maptalks.three/blob/1e45f5238f500225ada1deb09b8bab18c1b52cf2/src/BaseObject.js#L135
+            this._initOptions(options);
+            const {altitude, chunkLength} = options;
+            //generate geometry
+
+            const geometry = new THREE.BoxBufferGeometry(0.1, 0.2, 0.01);
+
+            //Initialize internal object3d
+            // https://github.com/maptalks/maptalks.three/blob/1e45f5238f500225ada1deb09b8bab18c1b52cf2/src/BaseObject.js#L140
+            this._createMesh(geometry, material);
+
+            //set object3d position
+            const z = layer.distanceToVector3(altitude, altitude).x;
+            const position = layer.coordinateToVector3(
+                lineString.getCoordinates()[0],
+                z
+            );
+            this.getObject3d().position.copy(position);
+            this._calTripData(layer);
+            this.on("remove", () => {
+                this.getMap().config("draggable", true);
+            });
+            // this.getObject3d().rotation.x = -Math.PI;
+        }
+
+        _calTripData(layer) {
+            const {lineString, chunkLength} = this.getOptions();
+            const lines = lineSlice(lineString, chunkLength);
+            const first = lines[0][0];
+            const v = layer.coordinateToVector3(first);
+            const coordinates = [first],
+                positions = [v];
+            lines.forEach((line) => {
+                for (let i = 0; i < line.length; i++) {
+                    const coordinate = line[i];
+                    if (
+                        coordinate.join(",").toString() ===
+                        coordinates[coordinates.length - 1].join(",").toString()
+                    ) {
+                        continue;
+                    }
+                    coordinates.push(coordinate);
+                    const v = layer.coordinateToVector3(coordinate);
+                    positions.push(v);
+                }
+            });
+            console.log(coordinates);
+            const bearings = [];
+            for (let i = 0; i < coordinates.length - 1; i++) {
+                const coordinate = coordinates[i];
+                const nextcoordinate = coordinates[i + 1];
+                var point1 = turf.point(coordinate);
+                var point2 = turf.point(nextcoordinate);
+                var bearing = turf.bearing(point1, point2);
+                bearings.push((-bearing * Math.PI) / 180);
+            }
+            console.log(bearings);
+            this._tripCoordinates = coordinates;
+            this._positions = positions;
+            this._bearings = bearings;
+            this._idx = -1;
+            this._rotating = false;
+        }
+
+        _animation() {
+            const {play, trip, rotation} = this.getOptions();
+            if (!play) {
+                this.getMap().config("draggable", true);
+                return;
+            }
+            const {_tripCoordinates, _bearings, _idx, _positions} = this;
+            this._idx++;
+            this.getObject3d().position.copy(_positions[this._idx]);
+            if (this._idx >= _tripCoordinates.length - 1) {
+                this._idx = -1;
+            }
+            if (trip) {
+                this.getMap().config("draggable", false);
+                this.getMap().setCenter(_tripCoordinates[this._idx]);
+            } else {
+                this.getMap().config("draggable", true);
+            }
+            const bearing = _bearings[this._idx];
+            if (bearing != undefined) {
+                this.getObject3d().rotation.z = bearing;
+                if (rotation) {
+                    this.getMap().config("draggable", false);
+                    if (this._rotating) {
+                        return;
+                    }
+                    if (Math.abs(bearing) >= Math.PI / 3) {
+                        const view = Object.assign({}, map.getView(), {
+                            bearing: Math.abs((bearing / Math.PI) * 180)
+                        });
+                        this._rotating = true;
+                        map.animateTo(
+                            view,
+                            {
+                                duration: 600
+                            },
+                            (frame) => {
+                                if (frame.state.playState === "finished") {
+                                    this._rotating = false;
+                                }
+                            }
+                        );
+                    }
+                } else {
+                    this.getMap().config("draggable", true);
+                }
+            }
+        }
+    }
+
     class Line extends maptalks.BaseObject {
         constructor(lineString, options, material, layer) {
             options = maptalks.Util.extend({}, OPTIONS1, options, {layer, lineString});
@@ -278,7 +423,7 @@
     var OPTIONS = {
         trail: 5,
         chunkLength: 50,
-        speed: 1,
+        speed: 0.01,
         altitude: 0,
         interactive: false
     };
@@ -296,7 +441,7 @@
             //Initialize internal configuration
             // https://github.com/maptalks/maptalks.three/blob/1e45f5238f500225ada1deb09b8bab18c1b52cf2/src/BaseObject.js#L135
             this._initOptions(options);
-
+console.log(lineString);
             const {altitude, chunkLength, speed, trail} = options;
             const chunkLines = lineSlice(lineString, chunkLength);
 
@@ -384,6 +529,7 @@
         // photosLayer.clear();
         // vectorsLayer.clear();
         lines = [], lineTrails = [];
+        var tripBox;
         Array.prototype.forEach.call(e.dataTransfer.files, function(file) {
 
             var reader = new FileReader();
@@ -405,6 +551,20 @@
                     });
 
 
+
+                    const lineString = new maptalks.LineString(lnglats);
+                    const liness = threeLayer.toLine(lineString, {}, new THREE.LineBasicMaterial());
+                    tripBox = new TripBox(
+                        lineString,
+                        {},
+                        new THREE.MeshPhongMaterial({
+                            color: "red"
+                        }),
+                        threeLayer
+                    );
+                    threeLayer.addMesh(tripBox).addMesh(liness);
+                    tripBox.getOptions().play = true;
+                    // tripBox.getOptions().trip = true;
                     var add = 0;
                     lnglats.forEach(function(item) {
                         add++;
@@ -431,17 +591,38 @@
 
                     })
 
+                    var position = 0;
+
+                    // setInterval(function() {
+                    //     position++;
+                    //     var bearin = 10;
+                    //     if (position > 0) {
+                    //         // bearin = bearing(lnglats[position][0], lnglats[position][1],lnglats[position+100][0], lnglats[position+100][1]);
+                    //     }
+                    //
+                    //     console.log(bearin);
+                    //
+                    //
+                    //     map.animateTo({
+                    //         center: [lnglats[position][0], lnglats[position][1]],
+                    //         bearing: bearin,
+                    //     }, {
+                    //         // easing: 'linear',
+                    //         duration: 200
+                    //     });
+                    // }, 100);
 
                     map.animateTo({
                         center: [lnglats[0][0], lnglats[0][1]],
                         zoom: 16,
                         pitch: 40
                     }, {
-                        duration: 5000
+                        duration: 100
                     });
 
                     const ps = lnglats.map(l => {
                         const [lng, lat, height] = l;
+                        console.log(l);
                         const z = threeLayer.distanceToVector3(height, height).x;
                         return threeLayer.coordinateToVector3([lng, lat], z);
                     });
@@ -452,9 +633,6 @@
 
 
                     const lineTrail = new LineTrail(lnglats, {chunkLength: 100, altitude: 1, trail: 1,}, highlightmaterial, threeLayer);
-
-
-
                     lineTrail.getObject3d().layers.enable(1);
                     lineTrails.push(lineTrail);
 
