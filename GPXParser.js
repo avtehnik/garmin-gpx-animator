@@ -60,6 +60,11 @@ gpxParser.prototype.parse = function (gpxstring) {
             link.type = this.getElementValue(linkElem, "type");
             this.metadata.link = link;
         }
+
+        let time = metadata.querySelector('time');
+        if(time != null){
+            this.metadata.time = new Date(this.getElementValue(metadata, "time"));
+        }
     }
 
     var wpts = [].slice.call(this.xmlSource.querySelectorAll('wpt'));
@@ -131,6 +136,7 @@ gpxParser.prototype.parse = function (gpxstring) {
         keepThis.routes.push(route);
     }
 
+
     var trks = [].slice.call(this.xmlSource.querySelectorAll('trk'));
     for (let idx in trks){
         let trk = trks[idx];
@@ -167,6 +173,7 @@ gpxParser.prototype.parse = function (gpxstring) {
 
             let time = keepThis.getElementValue(trkpt, "time");
             pt.time = time == null ? null : new Date(time);
+
 
             trackpoints.push(pt);
         }
