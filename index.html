@@ -51,8 +51,8 @@
           background-color: #000;
       }
 
-      .on-top{
-          z-index: 2!important;
+      .on-top {
+          z-index: 2 !important;
       }
 
       #holder {
@@ -131,16 +131,7 @@
 
         createGUI: function(GUI) {
             GPXViewer.GUI = new dat.GUI({name: 'Tracks', class: 'dsadsa'});
-
-                console.log( GPXViewer.GUI.domElement.parentNode.classList.add('on-top') );
-
-
-            // var gui = GPXViewer.GUI;
-
-            // Choose from named values
-            // gui.add(obj, 'speed', {Stopped: 0, Slow: 0.1, Fast: 5});
-            //
-
+            GPXViewer.GUI.domElement.parentNode.classList.add('on-top');
         },
 
         getMap: function() {
@@ -153,7 +144,6 @@
                 zoom: 13,
                 pitch: 0,
                 // bearing: 180,
-
                 centerCross: true,
                 doubleClickZoom: false,
                 baseLayer: GPXViewer.baseLayer
@@ -201,7 +191,6 @@
         init: function() {
 
             GPXViewer.getMap();
-
             document.addEventListener('keydown', function(e) {
                 if (e.key === 'n') {
                     GPXViewer.getMap().animateTo({
@@ -271,24 +260,14 @@
                         return [l.lon, l.lat, parseFloat((l.ele - baseAltitude).toFixed(1))];
                     });
                     const start = Math.floor(track.points[0].time * 100);
-                    const routePlayer = track.points.map(l => {
-                        return [l.lon, l.lat, Math.floor(l.time * 100) - start, {info: l.time.toString()}];
+                    const routePlayer = track.points.map((l, k) => {
+                        console.log(l, k);
+                        return [l.lon, l.lat, Math.floor(l.time * 1000) - start, { time: dateToText(l.time), index: k, ele: parseFloat((l.ele - baseAltitude).toFixed(1))}];
                     });
 
                     var player = new maptalks.RoutePlayer({path: routePlayer}, GPXViewer.map, {
                         maxTrailLine: 10
                     });
-
-
-                    player.on("playing", function(param) {
-                        if (
-                            player.getCurrentProperties(0) !== undefined &&
-                            player.getCurrentProperties(0) !== null
-                        ) {
-                            // console.log(window.player.getCurrentProperties(0).info);
-                        }
-                    });
-
 
 
                     var f1 = GPXViewer.GUI.addFolder(track.name + ' ' + day + '.' + month + '.' + year);
@@ -300,9 +279,18 @@
                         'Elevation max': track.elevation.max.toFixed(0) + ' m',
                         'Elevation avg': track.elevation.avg.toFixed(0) + ' m',
                         'Elevation min': track.elevation.min.toFixed(0) + ' m',
-                        'Start': function() {
+                        'Track start': function() {
                             GPXViewer.map.animateTo({
                                 center: [lnglats[0][0], lnglats[0][1]],
+                                zoom: 16,
+                                pitch: 40
+                            }, {
+                                duration: 100
+                            });
+                        },
+                        'Track end': function() {
+                            GPXViewer.map.animateTo({
+                                center: [lnglats[lnglats.length - 1][0], lnglats[lnglats.length - 1][1]],
                                 zoom: 16,
                                 pitch: 40
                             }, {
@@ -312,14 +300,75 @@
                         'Player Play': function() {
                             player.play();
                         },
-                        'Player rewind': function() {
+                        'Player Pause': function() {
+                            player.pause();
+                        },
+                        'Player cancel': function() {
                             player.cancel();
                         },
+                        'Player speed': 'x1',
+                        'Player show Route': true,
+                        'Player show Trail': true,
+                        'Progress': '0%',
+                        'Altitude': '0',
+                        'Time': '0',
                     }
 
+                    var speeds = {
+                        'x0.1': 0.1,
+                        'x0.5': 0.5,
+                        'x1': 1,
+                        'x2': 2,
+                        'x4': 4,
+                        'x10': 10,
+                        'x100': 100,
+                    }
+                    var unitTime = player.getUnitTime();
+
                     Object.keys(guiObj).forEach(function(k) {
-                        f1.add(guiObj, k);
+
+
+                        if (k === 'Player speed') {
+                            let speedCtrl = f1.add(guiObj, k).options(Object.keys(speeds));
+                            speedCtrl.onChange(function() {
+                                player.setUnitTime(unitTime * speeds[guiObj[k]]);
+                            });
+                        } else if (k === 'Altitude' || k === 'Time' || k === 'Progress') {
+                            f1.add(guiObj, k).listen();
+                        } else if (guiObj[k] === true || guiObj[k] === false) {
+                            f1.add(guiObj, k).onChange(function() {
+                                console.log(k, guiObj[k]);
+                                if (k === 'Player show Route') {
+                                    if (guiObj[k]) {
+                                        player.showRoute();
+                                    } else {
+                                        player.hideRoute();
+                                    }
+                                } else if (k === 'Player show Trail') {
+                                    if (guiObj[k]) {
+                                        player.showTrail();
+                                    } else {
+                                        player.hideTrail();
+                                    }
+                                }
+                            });
+                        } else {
+                            f1.add(guiObj, k)
+                        }
                     })
+
+
+                    player.on("playing", function(param) {
+                        if (
+                            player.getCurrentProperties(0) !== undefined &&
+                            player.getCurrentProperties(0) !== null
+                        ) {
+                            var currentPos = player.getCurrentProperties(0);
+                            guiObj['Progress'] = ((100 *  currentPos.index) / lnglats.length).toFixed(1)+'%';
+                            guiObj['Altitude'] = currentPos.ele;
+                            guiObj['Time'] = currentPos.time;
+                        }
+                    });
 
 
                     GPXViewer.map.animateTo({
@@ -362,7 +411,6 @@
                         }
 
                     })
-
 
 
                     const ps = lnglats.map(l => {
