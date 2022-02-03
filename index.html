@@ -261,7 +261,6 @@
                     });
                     const start = Math.floor(track.points[0].time * 100);
                     const routePlayer = track.points.map((l, k) => {
-                        console.log(l, k);
                         return [l.lon, l.lat, Math.floor(l.time * 1000) - start, { time: dateToText(l.time), index: k, ele: parseFloat((l.ele - baseAltitude).toFixed(1))}];
                     });
 
