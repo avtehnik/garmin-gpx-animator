@@ -30,10 +30,10 @@
   <script type="text/javascript"
           src="https://cdn.jsdelivr.net/npm/three@0.104.0/examples/js/libs/stats.min.js"></script>
   <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/lz-string@1.4.4/libs/lz-string.min.js"></script>
-  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/maptalks.three@latest/dist/maptalks.three.js"></script>
-  <script type="text/javascript" src="https://maptalks.org/maptalks.three/demo/js/geoutil.js"></script>
-  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/turf@7.0.0-alpha.1/dist/turf.js"></script>
-  <script src="https://maptalks.org/maptalks.routeplayer/dist/maptalks.routeplayer.js"></script>
+  <script type="text/javascript" src="js/maptalks.three.js"></script>
+  <script type="text/javascript" src="js/geoutil.js"></script>
+  <script type="text/javascript" src="js/turf.js"></script>
+  <script type="text/javascript" src="js/maptalks.routeplayer.js"></script>
 
   <script type="text/javascript" src="GPXParser.js"></script>
   <script type="text/javascript" src="helpers.js"></script>
@@ -104,10 +104,10 @@
 
     var GPXViewer = {
         baseLayer: new maptalks.TileLayer('tile', {
-            urlTemplate: 'http://{s}.tiles.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}.png?access_token=pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpejh2N21nMzAxMmQzMnA5emRyN2lucW0ifQ.jSE-g2vsn48Ry928pqylcg',
-            subdomains: ['a', 'b', 'c', 'd'],
-            attribution: '&copy; <a href="http://osm.org">OpenStreetMap</a> contributors, &copy; <a href="https://mapbox.com/">mapbox</a>'
-        }),
+          urlTemplate:
+                  'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+          subdomains: ['a', 'b', 'c', 'd'],
+          attribution: '&copy; <a href="https://www.esri.com/en-us/home">esri</a>'        }),
 
         map: null,
         tracksLayer: null,
