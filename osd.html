@@ -65,13 +65,13 @@
 
         #app .display {
             width: 100%;
-            background-color: white;
+            background-color: rgb(255 255 255 / 54%);
             position: absolute;
             bottom: 0px;
         }
 
-        #app .display span {
-            text-align: right;
+        #app .display .ppp {
+            padding: 0px 3px;
         }
 
     </style>
@@ -79,17 +79,20 @@
 </head>
 <body>
 <div id="holder">
-    <input type="file" id="fileElem" accept="*.gpx" onchange="onSelectFile(this.files)">
+    <input type="file" id="fileElem" accept="*.tcx" onchange="onSelectFile(this.files)">
     <div id="status">File API &amp; FileReader API not supported</div>
 </div>
 
 <div id="map"></div>
 <div id="app">
     <div class="display">
-        <div class="c" style="float:left;">{{state.speed}}km/h</div>
-        <div class="c" style="float:right;">alt {{state.alt}}m</div>
-        <div style="clear:both;"></div>
-        <div>{{state.lat}} {{state.lng}}</div>
+        <div class="ppp">
+
+            <div class="c" style="float:left;">{{state.speed}}km/h</div>
+            <div class="c" style="float:right;">alt {{state.alt}}m</div>
+            <div style="clear:both;"></div>
+            <div>{{state.lat}} {{state.lng}}</div>
+        </div>
     </div>
 </div>
 <script src="js/time-seeker.js"></script>
@@ -188,7 +191,7 @@
                         let hr = parseFloat(el.getElementsByTagName("HeartRateBpm")[0].textContent);
                         let speedEl = extensions[0].getElementsByTagName("ns3:Speed");
                         if (speedEl.length === 1) {
-                            speed = parseInt(speedEl[0].textContent);
+                            speed = parseInt(parseFloat(speedEl[0].textContent) * 3.6);
                         }
                         let p = {
                             time,
@@ -247,7 +250,6 @@
         state.className = 'fail';
     } else {
         state.className = 'success';
-        // state.innerHTML = 'Garmin gpx 3d visualizer';
     }
 
     holder.ondragover = function () {
