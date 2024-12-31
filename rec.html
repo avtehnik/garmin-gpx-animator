@@ -1,247 +1,145 @@
-<title>Record Cropped Screen using RecordRTC</title>
-<h1>Record Cropped Screen using <a href="https://github.com/muaz-khan/RecordRTC">RecordRTC</a></h1>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Screen Capture with Recording</title>
+</head>
+<body>
+<button id="start">Start Recording</button>
+<button id="stop" disabled>Stop Recording</button>
+<br><br>
+<video id="preview" autoplay muted style="border: 1px solid black;max-width: 400px"></video>
+<canvas id="canvas" style="width: 200px; height: 200px; border: 1px solid black"></canvas>
 
-<button id="btn-start-recording">Start Recording</button>
-<button id="btn-stop-recording" style="display: none;">Stop Recording</button>
-
-<br>
-<hr>
-
-<div id="edit-panel" style="border-bottom: 1px solid;">
-  <div>
-    <label htmlFor="x">X</label>
-    <input type="number" name="x" id="x" value="0"/>
-  </div>
-  <div>
-    <label htmlFor="y">Y</label>
-    <input type="number" name="y" id="y" value="0"/>
-  </div>
-  <div>
-    <label htmlFor="w">Width (-1 = Full size)</label>
-    <input type="number" name="w" id="w" value="-1"/>
-  </div>
-  <div>
-    <label htmlFor="h">Height (-1 = Full size)</label>
-    <input type="number" name="h" id="h" value="-1"/>
-  </div>
-
-  <button id="update" style="display: none;">Update X-Y Width-Height Coordinates</button>
-
-  <canvas></canvas>
-</div>
-
-<video id="mediaElement" autoPlay playsInline></video>
-
-<script src="/RecordRTC.js"></script>
 <script>
-  // this script tag is taken from: https://github.com/andersevenrud/webrtc-screenshare-crop-demo
-  var CROP_X = 10;
-  var CROP_Y = 20;
-  var CROP_W = 320; // default width
-  var CROP_H = 240; // default height
-  var VIDEO_WIDTH = 0;
-  var VIDEO_HEIGHT = 0;
-  var MAX_VIDEO_WIDTH = 1920;
-  var MAX_VIDEO_HEIGHT = 1080;
-  var _canvas;
-  var _context;
-
-  var htmlCanvasElement = document.querySelector('canvas');
-
-  // Form elements
-  document.getElementById("x").value = CROP_X;
-  document.getElementById("y").value = CROP_Y;
-  document.getElementById("w").value = CROP_W;
-  document.getElementById("h").value = CROP_H;
-
-  document.getElementById("update").onclick = function () {
-    var x = document.getElementById("x").value << 0;
-    var y = document.getElementById("y").value << 0;
-    var w = document.getElementById("w").value << 0;
-    var h = document.getElementById("h").value << 0;
-
-    if (x >= 0) {
-      CROP_X = x;
-    }
-    if (y >= 0) {
-      CROP_Y = y;
-    }
-
-    CROP_W = w || 0;
-    CROP_H = h || 0;
-  };
-
-  _context = htmlCanvasElement.getContext('2d');
-
-  /**
-   * Crops a video frame and shows it to the user
-   */
-  function CropFrame(ev, stream, video, callback) {
-    callback = callback || function () {
+    const startButton = document.getElementById('start');
+    const stopButton = document.getElementById('stop');
+    const preview = document.getElementById('preview');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let mainWindowSize = {width: 0, height: 0};
+    let mediaRecorder;
+    let recordedChunks = [];
+    let captureStream;
+    window.cropSettings = {
+        x: 253, y: 409, w: 400, h: 400
     };
 
-    _canvas = htmlCanvasElement;
+    // window.cropSettings = {x: 455, y: 1035, w: 800, h: 800}
+    window.cropSettings = {x: 198, y: 198, w: 400, h: 400}
 
-    if (CROP_X < 0) {
-      CROP_X = 0;
-    }
-    if (CROP_Y < 0) {
-      CROP_Y = 0;
-    }
-    if (CROP_W <= 0) {
-      CROP_W = VIDEO_WIDTH;
-    }
-    if (CROP_H <= 0) {
-      CROP_H = VIDEO_HEIGHT;
-    }
-    if (CROP_W > MAX_VIDEO_WIDTH) {
-      CROP_W = MAX_VIDEO_WIDTH;
-    }
-    if (CROP_H > MAX_VIDEO_HEIGHT) {
-      CROP_W = MAX_VIDEO_HEIGHT;
-    }
+    startButton.onclick = async () => {
+        try {
 
-    _canvas.width = CROP_W;
-    _canvas.height = CROP_H;
+            // Захоплення екрану
+            captureStream = await navigator.mediaDevices.getDisplayMedia({
+                video: true
+            });
 
-    _context.drawImage(video, CROP_X, CROP_Y, CROP_W, CROP_H, 0, 0, CROP_W, CROP_H);
+            // Встановлення джерела для прев'ю
+            preview.srcObject = captureStream;
+            preview.onloadedmetadata = () => preview.play();
 
-    // We need to scale down the image or else we get HTTP 414 Errors
-    // Also we scale down because of RTC message length restriction
-    var scanvas = document.createElement('canvas');
-    scanvas.width = _canvas.width;
-    scanvas.height = _canvas.height;
+            // Налаштування canvas
+            canvas.width = 200;
+            canvas.height = 200;
 
-    var wRatio = _canvas.width / 320;
-    var hRatio = _canvas.height / 240;
-    var maxRatio = Math.max(wRatio, hRatio);
-    if (maxRatio > 1) {
-      scanvas.width = _canvas.width / maxRatio;
-      scanvas.height = _canvas.height / maxRatio;
-    }
-    scanvas.getContext('2d').drawImage(_canvas, 0, 0, scanvas.width, scanvas.height);
 
-    callback(scanvas.toDataURL("image/jpeg"));
-  }
+            const videoTrack = captureStream.getVideoTracks()[0];
 
-  var recorder;
+            var parent_window = window.opener;
+            if(parent_window){
+                // parent_window.playPath();
+            }
 
-  function getScreenStream(callback) {
-    if (navigator.getDisplayMedia) {
-      navigator.getDisplayMedia({
-        video: true
-      }).then(screenStream => {
-        callback(screenStream);
-      });
-    } else if (navigator.mediaDevices.getDisplayMedia) {
-      navigator.mediaDevices.getDisplayMedia({
-        video: true
-      }).then(screenStream => {
-        callback(screenStream);
-      });
-    } else {
-      alert('getDisplayMedia API is not supported by this browser.');
-    }
-  }
+            // Функція для оновлення canvas
+            function updateCanvas() {
+                const settings = videoTrack.getSettings();
 
-  var mediaElement = document.querySelector('#mediaElement');
+                const cropX = (settings.width / 2 - window.cropSettings.x); // Центрування по X
+                const cropY = (settings.height / 2 - window.cropSettings.y); // Центрування по Y
 
-  document.querySelector('#btn-start-recording').onclick = function () {
-    document.querySelector('#btn-start-recording').style.display = 'none';
 
-    getScreenStream(function (screen) {
-      var inited = false;
+                console.log(settings.width, settings.height, settings.aspectRatio);
+                ctx.drawImage(preview, cropX, cropY, window.cropSettings.w, window.cropSettings.h, 0, 0, canvas.width, canvas.height);
+                requestAnimationFrame(updateCanvas);
+            }
 
-      mediaElement.ontimeupdate = function (ev) {
-        if (!inited) {
-          VIDEO_WIDTH = mediaElement.offsetWidth;
-          VIDEO_HEIGHT = mediaElement.offsetHeight;
+            updateCanvas(); // Запуск оновлення canvas
 
-          mediaElement.style.display = 'none';
-          document.querySelector('#edit-panel').style.display = 'block';
+            // Створення стріму з canvas
+            const canvasStream = canvas.captureStream();
 
-          inited = true;
+            // Ініціалізація MediaRecorder
+            mediaRecorder = new MediaRecorder(canvasStream, {mimeType: 'video/webm'});
+
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    recordedChunks.push(event.data);
+                }
+            };
+
+            mediaRecorder.onstop = () => {
+                // Створення блоба та збереження
+                const blob = new Blob(recordedChunks, {type: 'video/webm'});
+                const url = URL.createObjectURL(blob);
+
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'recording.webm';
+                a.click();
+                URL.revokeObjectURL(url);
+
+                recordedChunks = [];
+            };
+
+            // Періодично примушуємо виклик ondataavailable
+            mediaRecorder.start(100); // Кожні 100 мс генерується event ondataavailable
+
+            startButton.disabled = true;
+            stopButton.disabled = false;
+
+
+
+        } catch (error) {
+            console.error('Error during screen capture:', error);
         }
-
-        CropFrame(ev, screen, mediaElement);
-      };
-
-      mediaElement.srcObject = screen;
-      mediaElement.screen = screen;
-
-      addStreamStopListener(screen, function () {
-        document.querySelector('#btn-stop-recording').onclick();
-      });
-
-      // RecordRTC goes here
-      var captureStream = htmlCanvasElement.captureStream();
-      recorder = RecordRTC(captureStream, {
-        type: 'video'
-      });
-      recorder.startRecording();
-
-      document.querySelector('#btn-stop-recording').style.display = 'inline';
-    });
-  };
-
-  document.querySelector('#btn-stop-recording').onclick = function () {
-    document.querySelector('#btn-stop-recording').style.display = 'none';
-
-    recorder.stopRecording(function () {
-      var blob = recorder.getBlob();
-
-      document.querySelector('#edit-panel').style.display = 'none';
-      mediaElement.style.display = 'block';
-
-      mediaElement.srcObject = null;
-      mediaElement.src = URL.createObjectURL(blob);
-
-      if (mediaElement.screen && mediaElement.screen.getVideoTracks) {
-        mediaElement.screen.stop();
-        mediaElement.screen = null;
-      }
-
-      document.querySelector('#btn-start-recording').style.display = 'inline';
-    });
-  };
-
-  function addStreamStopListener(stream, callback) {
-    stream.addEventListener('ended', function () {
-      callback();
-      callback = function () {
-      };
-    }, false);
-    stream.addEventListener('inactive', function () {
-      callback();
-      callback = function () {
-      };
-    }, false);
-    stream.getTracks().forEach(function (track) {
-      track.addEventListener('ended', function () {
-        callback();
-        callback = function () {
-        };
-      }, false);
-      track.addEventListener('inactive', function () {
-        callback();
-        callback = function () {
-        };
-      }, false);
-    });
-  }
-
-  function querySelectorAll(selector) {
-    return Array.prototype.slice.call(document.querySelectorAll(selector));
-  }
-
-  querySelectorAll('input').forEach(function (input) {
-    input.onkeyup = input.oninput = function () {
-      if (!document.querySelector('#update').onclick) return;
-      document.querySelector('#update').onclick();
     };
-  });
-</script>
 
-<section><small id="send-message"></small></section>
-<script>window.useThisGithubPath = 'muaz-khan/RecordRTC';</script>
-<script src="https://www.webrtc-experiment.com/commits.js" async></script>
+    function stopRecording() {
+        mediaRecorder.stop();
+        captureStream.getTracks().forEach(track => track.stop());
+        startButton.disabled = false;
+        stopButton.disabled = true;
+    }
+
+    stopButton.onclick = () => {
+        stopRecording();
+    };
+
+    window.onload = function () {
+        startButton.click();
+    }
+
+    window.sendSize = function (size) {
+        mainWindowSize.width = size.w*2;
+        mainWindowSize.height = size.h*2;
+        const videoTrack = captureStream.getVideoTracks()[0];
+        let constraints = {
+            width: {min: mainWindowSize.width, ideal: mainWindowSize.width},
+            height: {min:  mainWindowSize.height, ideal:  mainWindowSize.height},
+            advanced: [{width: mainWindowSize.width, height:  mainWindowSize.height}, {aspectRatio: 1}],
+        };
+        videoTrack
+            .applyConstraints(constraints)
+            .catch((e) => {
+            });
+
+
+
+        console.log(size);
+    }
+</script>
+</body>
+</html>

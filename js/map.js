@@ -22,7 +22,7 @@ let MAP = {
     },
     car:null,
     init: function () {
-        MAP.map = L.map('map').setView([MAP.lat, MAP.lng], 13);
+        MAP.map = L.map('map').setView([MAP.lat, MAP.lng], 14);
         L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 19,
             attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'

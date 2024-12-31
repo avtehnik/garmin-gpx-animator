@@ -51,7 +51,7 @@
             display: none;
         }
 
-        #app {
+        #data {
             top: 50%;
             left: 50%;
             margin-top: -100px;
@@ -63,19 +63,19 @@
             border: 1px solid;
         }
 
-        #app .display {
+        #data .display {
             width: 100%;
             background-color: rgb(255 255 255 / 54%);
             position: absolute;
             bottom: 0px;
         }
 
-        #app .display .ppp {
+        #data .display .ppp {
             padding: 0px 3px;
         }
 
     </style>
-    <title>Garmin gpx 3d visualizer</title>
+    <title>map maker</title>
 </head>
 <body>
 <div id="holder">
@@ -85,13 +85,19 @@
 
 <div id="map"></div>
 <div id="app">
-    <div class="display">
-        <div class="ppp">
+    <div id="ui">
+        <div>timestamp {{state.timestamp}}</div>
+        <div>date {{state.date}}</div>
+    </div>
 
-            <div class="c" style="float:left;">{{state.speed}}km/h</div>
-            <div class="c" style="float:right;">alt {{state.alt}}m</div>
-            <div style="clear:both;"></div>
-            <div>{{state.lat}} {{state.lng}}</div>
+    <div id="data">
+        <div class="display">
+            <div class="ppp">
+                <div class="c" style="float:left;">{{state.speed}}km/h</div>
+                <div class="c" style="float:right;">alt {{state.alt}}m</div>
+                <div style="clear:both;"></div>
+                <div>{{state.lat}} {{state.lng}}</div>
+            </div>
         </div>
     </div>
 </div>
@@ -108,6 +114,8 @@
                 alt: 0,
                 lat: 0,
                 lng: 0,
+                timestamp:0,
+                date:0
             },
             ts: null,
             ui: {
@@ -117,41 +125,76 @@
                 start: 0,
                 stop: 0,
             },
-            mapPoints: {},
+            childWindow: null,
+            interval: null,
+            mapPoints: [],
         },
         mounted() {
             setTimeout(MAP.init, 100);
+            // this.play();
+
         },
         beforeMount() {
         },
         methods: {
-            selectDataFile(data, duration) {
+            selectDataFile(data) {
+                this.mapPoints = data;
                 console.log(data);
-                this.clear();
+                this.play();
+            },
+            clear() {
                 MAP.methods.clear();
-                let start = data[0];
-                MAP.methods.setStart(start.lat, start.lng);
+            },
+            sendSize(size) {
+                if (this.childWindow) {
+                    this.childWindow.sendSize(size);
+                }
+            },
+            play() {
+                this.childWindow = window.open('rec.html', '_blank', 'width=640,height=480');
 
+                let videoFps = 29.97003 // Фреймрейт відео
+                let realInterval = 5 // Інтервал між кадрами у реальному часі (5 секунд)
+                const realSecondsPerSecondTimelapse = videoFps * realInterval // 149.85015 секунд реального часу на 1 секунду таймлапсу
+                let steps = 150;
+                let step =  realSecondsPerSecondTimelapse / steps;
+                let step2 =  1 / steps;
+                console.log(step);
+
+                this.clear();
+                clearInterval(this.interval);
+                MAP.methods.clear();
+                let start = this.mapPoints[0];
+                MAP.methods.setStart(start.lat, start.lng);
                 let offset = 0;
-                let step = 1 / 4;
+                let offset2 = 0;
                 let index = 0;
-                setInterval(() => {
-                    if (data[index].offset < offset) {
+                this.interval = setInterval(() => {
+                    if (this.mapPoints[index].offset < offset) {
                         index++;
-                        let item = data[index];
+                        let item = this.mapPoints[index];
                         MAP.methods.addPoint(item.lat, item.lng, 0);
                         this.state.speed = item.speed;
                         this.state.alt = item.alt;
                         this.state.lat = item.lat;
                         this.state.lng = item.lng;
-
+                        this.state.timestamp = offset2;
+                        this.state.date = item.time;
+                        if (index >= this.mapPoints.length-1) {
+                            clearInterval(this.interval);
+                            console.log('end');
+                            this.childWindow.stopRecording();
+                        }
+                    }else {
+                        // console.log('skip')
                     }
-                    offset += step
-                }, step * 10);
-            },
-            clear() {
-                MAP.methods.clear();
-            },
+                    offset +=  step;
+                    offset2 +=  step2;
+                }, 1000/steps);
+                setInterval(() => {
+                    console.log(offset);
+                }, 1000)
+            }
         },
         computed: {},
     });
@@ -266,6 +309,16 @@
         onSelectFile(e.dataTransfer.files);
         return false;
     };
+
+
+    window.playPath = function () {
+        vueApp.play();
+    }
+
+    addEventListener("resize", (event) => {
+        let size = {w: window.innerWidth, h: window.innerHeight};
+        vueApp.sendSize(size);
+    });
 
 
 </script>
