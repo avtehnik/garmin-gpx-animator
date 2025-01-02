@@ -12,8 +12,10 @@
     <script src="js/leaflet.rotatedMarker.js"></script>
     <script src="js/vue_2.6.0.js"></script>
     <script type="text/javascript" src="js/geoutil.js"></script>
+    <script type="text/javascript" src="TCXParser.js"></script>
     <script type="text/javascript" src="GPXParser.js"></script>
     <script type="text/javascript" src="helpers.js"></script>
+    <script type="text/javascript" src="drag-and-drop.js"></script>
     <style>
         html,
         body {
@@ -74,6 +76,12 @@
             padding: 0px 3px;
         }
 
+        #ui {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+        }
+
     </style>
     <title>map maker</title>
 </head>
@@ -88,15 +96,27 @@
     <div id="ui">
         <div>timestamp {{state.timestamp}}</div>
         <div>date {{state.date}}</div>
+        <div>
+            interval:
+            <select v-model="realInterval" @change="changeInterval($event)">
+                <option v-for="i in intervals" :value="i">{{i}}s</option>
+            </select>
+            <button @click="testRun">Test</button>
+        </div>
+        <div>
+            <div v-for="time in timeTable"> {{time.a}}r = {{time.b}}t</div>
+        </div>
     </div>
 
     <div id="data">
         <div class="display">
             <div class="ppp">
                 <div class="c" style="float:left;">{{state.speed}}km/h</div>
+                <div class="c" style="float:right;">{{state.date}}</div>
+                <div style="clear:both;"></div>
+                <div class="c" style="float:left;">{{state.lat}} {{state.lng}}</div>
                 <div class="c" style="float:right;">alt {{state.alt}}m</div>
                 <div style="clear:both;"></div>
-                <div>{{state.lat}} {{state.lng}}</div>
             </div>
         </div>
     </div>
@@ -106,16 +126,44 @@
 <script type="text/javascript" src="js/map.js"></script>
 <script>
 
+    function formatDateTime(date) {
+        const year = date.getFullYear(); // Рік
+        const month = (date.getMonth() + 1).toString().padStart(2, '0'); // Місяць (0-11) + 1
+        const day = date.getDate().toString().padStart(2, '0'); // День
+        const hours = date.getHours().toString().padStart(2, '0'); // Години
+        const minutes = date.getMinutes().toString().padStart(2, '0'); // Хвилини
+        const seconds = date.getSeconds().toString().padStart(2, '0'); // Секунди
+
+        return `${year}.${month}.${day} ${hours}:${minutes}`;
+    }
+
+    function convertSecondsToTime(seconds) {
+        const hours = Math.floor(seconds / 3600); // Кількість годин
+        const minutes = Math.floor((seconds % 3600) / 60); // Кількість хвилин
+        const remainingSeconds = Math.floor(seconds % 60); // Залишок секунд
+
+        // Форматуємо значення як "00:00:00"
+        const formattedTime = [
+            hours.toString().padStart(2, '0'),
+            minutes.toString().padStart(2, '0'),
+            remainingSeconds.toString().padStart(2, '0')
+        ].join(':');
+
+        return formattedTime;
+    }
+
     let vueApp = new Vue({
         el: "#app",
         data: {
+            realInterval: 5,
+            intervals: [0.5, 1, 2, 5, 10, 30, 60],
             state: {
                 speed: 0,
                 alt: 0,
                 lat: 0,
                 lng: 0,
-                timestamp:0,
-                date:0
+                timestamp: 0,
+                date: new Date(),
             },
             ts: null,
             ui: {
@@ -126,21 +174,35 @@
                 stop: 0,
             },
             childWindow: null,
-            interval: null,
             mapPoints: [],
         },
         mounted() {
             setTimeout(MAP.init, 100);
             // this.play();
 
+            this.state.date = formatDateTime(new Date());
+
         },
         beforeMount() {
+            if (window.localStorage['interval']) {
+                this.realInterval = parseFloat(window.localStorage['interval']);
+                console.log(this.realInterval);
+            }
         },
         methods: {
+            testRun() {
+                this.play();
+            },
+            changeInterval(event) {
+                window.localStorage['interval'] = event.target.value;
+            },
             selectDataFile(data) {
                 this.mapPoints = data;
-                console.log(data);
-                this.play();
+                this.childWindow = window.open('rec.html', '_blank', 'width=640,height=480');
+                MAP.methods.clear();
+                let start = this.mapPoints[0];
+                MAP.methods.setStart(start.lat, start.lng);
+                // this.play();
             },
             clear() {
                 MAP.methods.clear();
@@ -151,21 +213,16 @@
                 }
             },
             play() {
-                this.childWindow = window.open('rec.html', '_blank', 'width=640,height=480');
-
                 let videoFps = 29.97003 // Фреймрейт відео
-                let realInterval = 5 // Інтервал між кадрами у реальному часі (5 секунд)
-                const realSecondsPerSecondTimelapse = videoFps * realInterval // 149.85015 секунд реального часу на 1 секунду таймлапсу
+                // this.realInterval = 5 // Інтервал між кадрами у реальному часі (5 секунд)
+                const realSecondsPerSecondTimelapse = videoFps * this.realInterval // 149.85015 секунд реального часу на 1 секунду таймлапсу
                 let steps = 150;
-                let step =  realSecondsPerSecondTimelapse / steps;
-                let step2 =  1 / steps;
+                let step = realSecondsPerSecondTimelapse / steps;
+                let step2 = 1 / steps;
                 console.log(step);
-
                 this.clear();
                 clearInterval(this.interval);
-                MAP.methods.clear();
-                let start = this.mapPoints[0];
-                MAP.methods.setStart(start.lat, start.lng);
+
                 let offset = 0;
                 let offset2 = 0;
                 let index = 0;
@@ -179,138 +236,81 @@
                         this.state.lat = item.lat;
                         this.state.lng = item.lng;
                         this.state.timestamp = offset2;
-                        this.state.date = item.time;
-                        if (index >= this.mapPoints.length-1) {
+                        // this.state.date = item.time;
+                        this.state.date = formatDateTime(item.time);
+                        if (index >= this.mapPoints.length - 1) {
                             clearInterval(this.interval);
                             console.log('end');
                             this.childWindow.stopRecording();
                         }
-                    }else {
+                    } else {
                         // console.log('skip')
                     }
-                    offset +=  step;
-                    offset2 +=  step2;
-                }, 1000/steps);
+                    offset += step;
+                    offset2 += step2;
+                }, 1000 / steps);
                 setInterval(() => {
                     console.log(offset);
                 }, 1000)
             }
         },
-        computed: {},
+        computed: {
+            timeTable() {
+                return [60 * 60, 60 * 60 * 2, 60 * 60 * 4, 60 * 60 * 6].map(i => {
+                    return {
+                        a: convertSecondsToTime(i),
+                        b: convertSecondsToTime(i / this.realInterval / 30),
+                    }
+                });
+            }
+        },
     });
 
-
     function onSelectFile(files) {
-        // tracksLayer.clear();
-        // vectorsLayer.clear();
-        var lines = [];
-        var lineTrails = [];
         Array.prototype.forEach.call(files, function (file) {
             let tcx = file.name.indexOf('.tcx') !== -1;
+            let gpx = file.name.indexOf('.gpx') !== -1;
+            console.log({tcx, gpx});
             var reader = new FileReader();
             reader.onload = function (e) {
                 var contents = e.target.result;
                 if (tcx) {
+                    let tcxParser = new TCXParser();
+                    let latLngs = tcxParser.parse(contents);
+                    vueApp.selectDataFile(latLngs, arrayDateDiff(latLngs, 'time'));
+                } else if (gpx) {
+                    var gpxParser = new GPXParser();
+                    gpxParser.parse(contents);
+                    gpxParser.tracks.forEach(function (track) {
+                        var baseAltitude = track.points[track.points.length - 1].ele;
+                        baseAltitude = 0;
+                        var date = gpxParser.metadata.time;
 
-                    const parser = new DOMParser();
-                    const doc = parser.parseFromString(contents, "text/xml");
-
-                    let trackpoints = Array.from(doc.getElementsByTagName("Trackpoint"));
-                    let lnglats = [];
-                    let startTime = new Date(trackpoints[0].getElementsByTagName("Time")[0].textContent);
-
-                    trackpoints.map((el) => {
-                        let speed = 0;
-                        let time = new Date(el.getElementsByTagName("Time")[0].textContent);
-                        let alt = parseInt(el.getElementsByTagName("AltitudeMeters")[0].textContent);
-                        let dist = parseInt(el.getElementsByTagName("DistanceMeters")[0].textContent);
-                        let position = el.getElementsByTagName("Position");
-                        if (position.length === 0) {
-                            return;
-                        }
-                        let extensions = el.getElementsByTagName("Extensions");
-                        let lat = parseFloat(el.getElementsByTagName("LatitudeDegrees")[0].textContent).toFixed(5);
-                        let lng = parseFloat(el.getElementsByTagName("LongitudeDegrees")[0].textContent).toFixed(5);
-                        let hr = parseFloat(el.getElementsByTagName("HeartRateBpm")[0].textContent);
-                        let speedEl = extensions[0].getElementsByTagName("ns3:Speed");
-                        if (speedEl.length === 1) {
-                            speed = parseInt(parseFloat(speedEl[0].textContent) * 3.6);
-                        }
-                        let p = {
-                            time,
-                            alt,
-                            dist,
-                            lat,
-                            lng,
-                            hr,
-                            speed,
-                            offset: (time - startTime) / 1000
-                        }
-                        lnglats.push(p);
+                        const month = String(date.getMonth()).padStart(2, '0');
+                        const day = String(date.getDate()).padStart(2, '0');
+                        const year = date.getFullYear();
+                        let dist = 0;
+                        const lnglats = track.points.map((l, index) => {
+                            dist: dist += track.distance.cumul[index];
+                            return {
+                                lng: l.lon.toFixed(5),
+                                lat: l.lat.toFixed(5),
+                                alt: parseInt((l.ele - baseAltitude)),
+                                dist: dist,
+                                time: l.time,
+                                offset: (l.time - track.points[0].time) / 1000
+                            };
+                        });
+                        vueApp.selectDataFile(lnglats, arrayDateDiff(track.points, 'time'));
                     })
-
-                    vueApp.selectDataFile(lnglats, arrayDateDiff(lnglats, 'time'));
-                    return
                 }
-                var gpx = new gpxParser();
-                gpx.parse(contents);
-                var guiObj = {};
-                gpx.tracks.forEach(function (track) {
-                    var baseAltitude = track.points[track.points.length - 1].ele;
-                    baseAltitude = 0;
-                    var date = gpx.metadata.time;
-
-                    const month = String(date.getMonth()).padStart(2, '0');
-                    const day = String(date.getDate()).padStart(2, '0');
-                    const year = date.getFullYear();
-                    let dist = 0;
-                    const lnglats = track.points.map((l, index) => {
-                        dist: dist += track.distance.cumul[index];
-                        return {
-                            lng: l.lon,
-                            lat: l.lat,
-                            alt: parseFloat((l.ele - baseAltitude).toFixed(1)),
-                            dist: dist,
-                            time: l.time,
-                            offset: (l.time - track.points[0].time) / 1000
-                        };
-                    });
-                    vueApp.selectDataFile(lnglats, arrayDateDiff(track.points, 'time'));
-
-                })
-
-
             };
             reader.readAsText(file);
-            // map.fitExtent(tracksLayer.getExtent(), 0);
         });
     }
 
-    var holder = document.getElementById('holder'),
-        state = document.getElementById('status');
 
-    if (typeof window.FileReader === 'undefined') {
-        state.className = 'fail';
-    } else {
-        state.className = 'success';
-    }
-
-    holder.ondragover = function () {
-        this.className = 'hover';
-        return false;
-    };
-    holder.ondragend = function () {
-        this.className = '';
-        return false;
-    };
-    holder.ondrop = function (e) {
-        this.className = '';
-        e.preventDefault();
-        onSelectFile(e.dataTransfer.files);
-        return false;
-    };
-
-
+    new DragAndDrop('holder', 'status', onSelectFile)
     window.playPath = function () {
         vueApp.play();
     }
@@ -319,7 +319,6 @@
         let size = {w: window.innerWidth, h: window.innerHeight};
         vueApp.sendSize(size);
     });
-
 
 </script>
 </body>

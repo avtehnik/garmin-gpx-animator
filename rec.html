@@ -48,9 +48,8 @@
 
             const videoTrack = captureStream.getVideoTracks()[0];
 
-            var parent_window = window.opener;
-            if(parent_window){
-                // parent_window.playPath();
+            if (window.opener) {
+                window.opener.playPath();
             }
 
             // Функція для оновлення canvas
@@ -96,11 +95,8 @@
 
             // Періодично примушуємо виклик ondataavailable
             mediaRecorder.start(100); // Кожні 100 мс генерується event ondataavailable
-
             startButton.disabled = true;
             stopButton.disabled = false;
-
-
 
         } catch (error) {
             console.error('Error during screen capture:', error);
@@ -112,6 +108,9 @@
         captureStream.getTracks().forEach(track => track.stop());
         startButton.disabled = false;
         stopButton.disabled = true;
+        // if (window.opener) {
+        //     window.opener.playPath();
+        // }
     }
 
     stopButton.onclick = () => {
@@ -121,24 +120,19 @@
     window.onload = function () {
         startButton.click();
     }
-
     window.sendSize = function (size) {
-        mainWindowSize.width = size.w*2;
-        mainWindowSize.height = size.h*2;
+        mainWindowSize.width = size.w * 2;
+        mainWindowSize.height = size.h * 2;
         const videoTrack = captureStream.getVideoTracks()[0];
         let constraints = {
             width: {min: mainWindowSize.width, ideal: mainWindowSize.width},
-            height: {min:  mainWindowSize.height, ideal:  mainWindowSize.height},
-            advanced: [{width: mainWindowSize.width, height:  mainWindowSize.height}, {aspectRatio: 1}],
+            height: {min: mainWindowSize.height, ideal: mainWindowSize.height},
+            advanced: [{width: mainWindowSize.width, height: mainWindowSize.height}, {aspectRatio: 1}],
         };
         videoTrack
             .applyConstraints(constraints)
             .catch((e) => {
             });
-
-
-
-        console.log(size);
     }
 </script>
 </body>

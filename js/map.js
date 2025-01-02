@@ -55,7 +55,7 @@ let MAP = {
         setStart: function (lat, lng) {
             // MAP.car.setRotationAngle(heading);
             MAP.map.setView([lat, lng]);
-            MAP.methods.addPoint(lat, lng);
+            // MAP.methods.addPoint(lat, lng);
         },
     },
 }
